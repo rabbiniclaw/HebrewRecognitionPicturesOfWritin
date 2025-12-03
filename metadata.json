@@ -1,0 +1,5 @@
+{
+  "name": "TextSegmenter AI",
+  "description": "An AI-powered application to detect, crop, and organize text segments (letters, words, or lines) from images into structured folders.",
+  "requestFramePermissions": []
+}
