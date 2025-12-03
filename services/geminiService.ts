@@ -1,14 +1,22 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { SegmentMode, TextSegment } from "../types";
 
-// Initialize the Gemini AI client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// We no longer initialize the client globally to prevent crashes if env var is missing.
+// instead, we initialize it inside the function using the user-provided key.
 
 export const analyzeImage = async (
+  apiKey: string,
   base64Image: string,
   mode: SegmentMode,
   modelName: string = "gemini-2.5-flash"
 ): Promise<TextSegment[]> => {
+  if (!apiKey) {
+    throw new Error("נא להזין מפתח API בראש הדף.");
+  }
+
+  // Initialize client with the specific key provided by user
+  const ai = new GoogleGenAI({ apiKey: apiKey });
+
   // Remove header if present (e.g., "data:image/jpeg;base64,")
   const cleanBase64 = base64Image.split(",")[1] || base64Image;
 

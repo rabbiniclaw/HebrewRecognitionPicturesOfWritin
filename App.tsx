@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Upload, Image as ImageIcon, X, AlertCircle, FolderTree, Scan, Trash2 } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Upload, Image as ImageIcon, X, AlertCircle, FolderTree, Scan, Key, ExternalLink, Sparkles } from 'lucide-react';
 import { SegmentMode, TextSegment } from './types';
 import { analyzeImage } from './services/geminiService';
 import { cropSegments } from './utils/imageProcessing';
@@ -7,6 +7,7 @@ import { generateAndDownloadZip } from './utils/zipUtils';
 import { ControlPanel } from './components/ControlPanel';
 
 const App: React.FC = () => {
+  const [apiKey, setApiKey] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [mode, setMode] = useState<SegmentMode>(SegmentMode.CHARACTER);
   const [selectedModel, setSelectedModel] = useState<string>("gemini-2.5-flash");
@@ -15,6 +16,20 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load API Key from local storage on mount
+  useEffect(() => {
+    const savedKey = localStorage.getItem("gemini_api_key");
+    if (savedKey) {
+      setApiKey(savedKey);
+    }
+  }, []);
+
+  const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newKey = e.target.value;
+    setApiKey(newKey);
+    localStorage.setItem("gemini_api_key", newKey);
+  };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -38,15 +53,12 @@ const App: React.FC = () => {
     if (items.length === 0) return [];
     
     // 1. Group by rough Y position (lines)
-    // We use a threshold relative to the coordinate system (0-1000)
     const lineThreshold = 30; 
     const lines: TextSegment[][] = [];
     
-    // Sort by Ymin first to process top-down
     const sortedByY = [...items].sort((a, b) => a.box.ymin - b.box.ymin);
     
     sortedByY.forEach(item => {
-      // Try to find an existing line this item belongs to
       const matchingLine = lines.find(line => {
         const avgY = line.reduce((sum, i) => sum + i.box.ymin, 0) / line.length;
         return Math.abs(item.box.ymin - avgY) < lineThreshold;
@@ -59,26 +71,28 @@ const App: React.FC = () => {
       }
     });
     
-    // 2. Sort within each line by Xmax descending (Right to Left)
     lines.forEach(line => {
       line.sort((a, b) => b.box.xmax - a.box.xmax);
     });
     
-    // 3. Ensure lines themselves are sorted top-to-bottom
     lines.sort((a, b) => a[0].box.ymin - b[0].box.ymin);
     
     return lines.flat();
   };
 
   const handleProcess = async () => {
+    if (!apiKey) {
+      setError("נא להזין מפתח API בראש הדף כדי להמשיך.");
+      return;
+    }
     if (!selectedImage) return;
 
     setIsProcessing(true);
     setError(null);
 
     try {
-      // 1. Get coordinates from Gemini
-      const rawSegments = await analyzeImage(selectedImage, mode, selectedModel);
+      // Pass the API Key explicitly to the service
+      const rawSegments = await analyzeImage(apiKey, selectedImage, mode, selectedModel);
       
       if (rawSegments.length === 0) {
         setError("לא זוהו טקסטים בתמונה. נסה תמונה ברורה יותר או מודל חזק יותר.");
@@ -86,15 +100,12 @@ const App: React.FC = () => {
         return;
       }
 
-      // 2. Crop images locally
       const croppedSegments = await cropSegments(selectedImage, rawSegments);
-      
-      // 3. Sort them RTL for Hebrew
       const sortedSegments = sortSegmentsRTL(croppedSegments);
       
       setSegments(sortedSegments);
     } catch (err: any) {
-      setError(err.message || "אירעה שגיאה בעיבוד התמונה.");
+      setError(err.message || "אירעה שגיאה בעיבוד התמונה. וודא שהמפתח תקין.");
     } finally {
       setIsProcessing(false);
     }
@@ -107,22 +118,16 @@ const App: React.FC = () => {
 
   const handleDownloadText = () => {
     if (segments.length === 0) return;
-
-    // Reconstruct text based on segments
-    // Since segments are already sorted RTL (lines top-down, items right-left)
-    // We just need to insert newlines when y-coordinate jumps significantly
     
     let fullText = "";
     let lastY = -1;
-    const lineThreshold = 30; // Same as sorting logic
+    const lineThreshold = 30; 
 
     segments.forEach((seg, index) => {
-      // Check for new line
       if (lastY !== -1 && Math.abs(seg.box.ymin - lastY) > lineThreshold) {
         fullText += "\n";
       }
       
-      // Add text. If it's not the start of a line, add a space (unless in Char mode)
       const isNewLine = lastY !== -1 && Math.abs(seg.box.ymin - lastY) > lineThreshold;
       const isFirst = index === 0;
       
@@ -132,13 +137,11 @@ const App: React.FC = () => {
       
       fullText += seg.text;
       
-      // Update tracking Y (using average of line would be better, but simple prev Y works for sorted list)
       if (isNewLine || lastY === -1) {
           lastY = seg.box.ymin;
       }
     });
 
-    // Create download
     const blob = new Blob([fullText], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -162,19 +165,46 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen pb-12 font-sans" dir="rtl">
+    <div className="min-h-screen pb-12 font-sans bg-gradient-to-br from-gray-50 to-gray-100" dir="rtl">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="bg-indigo-600 p-2 rounded-lg">
-              <ImageIcon className="text-white w-6 h-6" />
+      <header className="bg-white/80 backdrop-blur-md border-b border-gray-200/60 sticky top-0 z-40 shadow-sm transition-all">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col md:flex-row items-center justify-between gap-4">
+          
+          <div className="flex items-center gap-3">
+            <div className="bg-gradient-to-br from-indigo-500 to-violet-600 p-2 rounded-xl shadow-lg shadow-indigo-200">
+              <Sparkles className="text-white w-6 h-6" />
             </div>
-            <h1 className="text-xl font-bold text-gray-900 tracking-tight">מנתח טקסט חכם</h1>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-none">מנתח טקסט AI</h1>
+              <p className="text-xs text-gray-500 mt-0.5 font-medium">חיתוך וזיהוי חכם לדרייב</p>
+            </div>
           </div>
-          <div className="text-sm text-gray-500 hidden sm:block">
-            מופעל ע"י ג'מיני AI
+
+          {/* API Key Input Section */}
+          <div className="flex flex-col items-end w-full md:w-auto">
+            <div className="flex items-center gap-2 w-full md:w-auto bg-white border border-gray-300 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 shadow-sm transition-shadow hover:shadow-md">
+              <Key size={18} className="text-indigo-500 min-w-[18px]" />
+              <input 
+                type="password"
+                value={apiKey}
+                onChange={handleApiKeyChange}
+                placeholder="הכנס מפתח Gemini API כאן..."
+                className="bg-transparent border-none outline-none text-sm text-gray-700 w-full md:w-80 placeholder-gray-400"
+              />
+            </div>
+            <div className="flex items-center gap-4 mt-1.5 text-[10px] text-gray-500 px-1">
+              <span>תומך במפתח חינמי ובתשלום</span>
+              <a 
+                href="https://aistudio.google.com/app/apikey" 
+                target="_blank" 
+                rel="noreferrer"
+                className="text-indigo-600 hover:text-indigo-800 flex items-center gap-1 font-medium hover:underline"
+              >
+                השג מפתח כאן <ExternalLink size={10} />
+              </a>
+            </div>
           </div>
+
         </div>
       </header>
 
@@ -182,13 +212,13 @@ const App: React.FC = () => {
         
         {/* Error Banner */}
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3 text-red-700 animate-fadeIn">
-            <AlertCircle size={20} />
-            <p>{error}</p>
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3 text-red-700 animate-fadeIn shadow-sm">
+            <AlertCircle size={20} className="shrink-0" />
+            <p className="font-medium">{error}</p>
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           
           {/* Right Column: Input Area */}
           <div className="lg:col-span-2 space-y-6">
@@ -197,13 +227,17 @@ const App: React.FC = () => {
             {!selectedImage ? (
               <div 
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-gray-300 rounded-2xl h-96 flex flex-col items-center justify-center bg-white hover:bg-gray-50 transition-colors cursor-pointer group shadow-sm"
+                className="border-2 border-dashed border-gray-300 hover:border-indigo-400 rounded-3xl h-[28rem] flex flex-col items-center justify-center bg-white hover:bg-gray-50 transition-all cursor-pointer group shadow-sm hover:shadow-md"
               >
-                <div className="bg-indigo-50 p-4 rounded-full group-hover:scale-110 transition-transform duration-300">
-                  <Upload className="w-8 h-8 text-indigo-600" />
+                <div className="bg-indigo-50 p-6 rounded-full group-hover:scale-110 group-hover:bg-indigo-100 transition-all duration-300 mb-6">
+                  <Upload className="w-10 h-10 text-indigo-600" />
                 </div>
-                <h3 className="mt-4 text-lg font-medium text-gray-900">העלה תמונה</h3>
-                <p className="mt-1 text-sm text-gray-500">תומך ב-JPG, PNG (כתב יד או דפוס)</p>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">העלה תמונה לניתוח</h3>
+                <p className="text-gray-500 text-center max-w-xs leading-relaxed">
+                  תומך בכתב יד ודפוס.
+                  <br/>
+                  JPG, PNG פורמטים נתמכים
+                </p>
                 <input 
                   type="file" 
                   ref={fileInputRef} 
@@ -213,27 +247,27 @@ const App: React.FC = () => {
                 />
               </div>
             ) : (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden relative">
+              <div className="bg-white rounded-3xl shadow-xl shadow-gray-200/50 border border-white overflow-hidden relative ring-1 ring-gray-100">
                 {/* Image Header */}
                 <div className="absolute top-4 left-4 z-10">
                    <button 
                     onClick={handleReset}
-                    className="bg-white/90 backdrop-blur-sm hover:bg-red-50 hover:text-red-600 text-gray-700 p-2 rounded-full shadow-lg transition-all border border-gray-200"
+                    className="bg-white/80 backdrop-blur-md hover:bg-red-50 hover:text-red-600 text-gray-700 p-2.5 rounded-full shadow-lg transition-all border border-gray-200"
                     title="נקה תמונה"
                   >
                     <X size={20} />
                   </button>
                 </div>
                 
-                <div className="relative p-6 bg-gray-50/50 flex justify-center min-h-[300px]">
+                <div className="relative p-8 bg-gray-50/50 flex justify-center min-h-[350px] pattern-grid">
                   <img 
                     src={selectedImage} 
                     alt="Original" 
-                    className="max-h-[500px] object-contain rounded-lg shadow-sm border border-gray-200" 
+                    className="max-h-[500px] object-contain rounded-lg shadow-lg border border-gray-200 bg-white" 
                   />
                 </div>
 
-                <div className="p-4 border-t border-gray-100 bg-white">
+                <div className="p-6 border-t border-gray-100 bg-white">
                   <ControlPanel
                     mode={mode}
                     setMode={setMode}
@@ -244,8 +278,14 @@ const App: React.FC = () => {
                     hasResults={segments.length > 0}
                     onDownload={handleDownload}
                     onDownloadText={handleDownloadText}
-                    disabled={false}
+                    disabled={!apiKey}
                   />
+                  {!apiKey && (
+                    <div className="mt-4 bg-amber-50 text-amber-800 px-4 py-2 rounded-lg text-sm text-center border border-amber-100 flex items-center justify-center gap-2">
+                       <Key size={14} />
+                       נא להזין מפתח API בראש הדף כדי להפעיל את הכפתורים
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -253,44 +293,51 @@ const App: React.FC = () => {
 
           {/* Left Column: Results Area */}
           <div className="lg:col-span-1">
-             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 flex flex-col h-[calc(100vh-140px)] sticky top-24">
-                <div className="p-4 border-b border-gray-100 bg-gray-50/50 rounded-t-2xl">
-                  <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-                    <FolderTree size={18} className="text-indigo-600"/>
-                    תוצאות זיהוי (מימין לשמאל)
+             <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl shadow-gray-200/50 border border-white flex flex-col h-[calc(100vh-140px)] sticky top-24 ring-1 ring-gray-100">
+                <div className="p-5 border-b border-gray-100 bg-white/50 rounded-t-3xl">
+                  <h2 className="font-bold text-gray-900 flex items-center gap-2 text-lg">
+                    <FolderTree size={20} className="text-indigo-600"/>
+                    תוצאות זיהוי
                   </h2>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {segments.length} פריטים זוהו. לחץ על X למחיקת שגיאות.
-                  </p>
+                  <div className="flex items-center justify-between mt-2">
+                     <p className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-md">
+                       מיון: ימין לשמאל
+                     </p>
+                     <p className="text-xs text-indigo-600 font-medium">
+                       {segments.length} פריטים
+                     </p>
+                  </div>
                 </div>
                 
-                <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar bg-gray-50/30">
                   {segments.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center text-gray-400 p-8">
-                       <Scan className="w-12 h-12 mb-3 opacity-20" />
-                       <p className="text-sm">העלה תמונה ולחץ על "בצע ניתוח" כדי לראות את החיתוכים כאן.</p>
+                    <div className="h-full flex flex-col items-center justify-center text-center text-gray-400 p-8 space-y-4">
+                       <div className="bg-gray-100 p-4 rounded-full">
+                          <Scan className="w-8 h-8 opacity-40" />
+                       </div>
+                       <p className="text-sm font-medium">התוצאות יופיעו כאן לאחר הניתוח</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-3 pb-4">
                       {segments.map((seg) => (
-                        <div key={seg.id} className="group relative bg-gray-50 rounded-lg p-2 border border-gray-100 hover:border-indigo-200 hover:shadow-sm transition-all">
+                        <div key={seg.id} className="group relative bg-white rounded-xl p-2.5 border border-gray-100 hover:border-indigo-300 hover:shadow-md transition-all duration-200">
                           <button 
                             onClick={() => handleDeleteSegment(seg.id)}
-                            className="absolute -top-2 -right-2 bg-white text-red-500 hover:bg-red-50 border border-gray-200 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10 scale-90 hover:scale-100"
+                            className="absolute -top-2 -right-2 bg-white text-red-500 hover:bg-red-500 hover:text-white border border-gray-200 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-all shadow-sm z-10 scale-90 hover:scale-105"
                             title="מחק חיתוך זה"
                           >
                             <X size={14} />
                           </button>
                           
-                          <div className="aspect-square bg-white rounded-md border border-gray-200 mb-2 overflow-hidden flex items-center justify-center relative">
+                          <div className="aspect-square bg-gray-50 rounded-lg border border-gray-100 mb-2 overflow-hidden flex items-center justify-center relative p-1">
                             {seg.imageData ? (
-                              <img src={seg.imageData} alt={seg.text} className="w-full h-full object-contain p-1" />
+                              <img src={seg.imageData} alt={seg.text} className="w-full h-full object-contain" />
                             ) : (
                               <div className="w-full h-full bg-gray-100 animate-pulse" />
                             )}
                           </div>
                           <div className="text-center">
-                            <span className="inline-block bg-white px-2 py-0.5 rounded text-sm font-bold text-gray-800 border border-gray-200 shadow-sm truncate max-w-full">
+                            <span className="inline-block w-full bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-sm font-bold border border-indigo-100 truncate">
                               {seg.text}
                             </span>
                           </div>

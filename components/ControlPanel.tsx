@@ -1,6 +1,6 @@
 import React from 'react';
 import { SegmentMode } from '../types';
-import { Scan, Type, AlignJustify, Loader2, FolderTree, Cpu, FileText } from 'lucide-react';
+import { Scan, Type, AlignJustify, Loader2, FolderTree, Cpu, FileText, CheckCircle2 } from 'lucide-react';
 
 interface ControlPanelProps {
   mode: SegmentMode;
@@ -28,83 +28,82 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   disabled
 }) => {
   return (
-    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
       
-      {/* Top Row: Model & Mode */}
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+      {/* Configuration Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         
         {/* Model Selection */}
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <Cpu className="text-gray-400" size={20} />
-          <select 
-            value={selectedModel}
-            onChange={(e) => setModel(e.target.value)}
-            className="bg-gray-50 border border-gray-200 text-gray-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5 outline-none"
-          >
-            <option value="gemini-2.5-flash">Gemini 2.5 Flash (מהיר - לדפוס)</option>
-            <option value="gemini-3-pro-preview">Gemini 3 Pro (מדויק - לכתב יד)</option>
-          </select>
+        <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+          <label className="text-xs font-semibold text-gray-500 mb-2 block flex items-center gap-1">
+            <Cpu size={14} />
+            בחר מודל עיבוד
+          </label>
+          <div className="relative">
+            <select 
+              value={selectedModel}
+              onChange={(e) => setModel(e.target.value)}
+              className="w-full appearance-none bg-white border border-gray-200 text-gray-800 text-sm rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none font-medium pr-8"
+            >
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash (מהיר ⚡)</option>
+              <option value="gemini-3-pro-preview">Gemini 3 Pro (מדויק 🎯)</option>
+            </select>
+            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-500">
+               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+            </div>
+          </div>
         </div>
 
         {/* Mode Selection */}
-        <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-lg self-center md:self-auto">
-          <button
-            onClick={() => setMode(SegmentMode.CHARACTER)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              mode === SegmentMode.CHARACTER
-                ? 'bg-white text-indigo-600 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Type size={16} />
-            <span>אותיות</span>
-          </button>
-          <button
-            onClick={() => setMode(SegmentMode.WORD)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              mode === SegmentMode.WORD
-                ? 'bg-white text-indigo-600 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Scan size={16} />
-            <span>מילים</span>
-          </button>
-          <button
-            onClick={() => setMode(SegmentMode.LINE)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              mode === SegmentMode.LINE
-                ? 'bg-white text-indigo-600 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <AlignJustify size={16} />
-            <span>שורות</span>
-          </button>
+        <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+          <label className="text-xs font-semibold text-gray-500 mb-2 block flex items-center gap-1">
+             <Scan size={14} />
+             סוג חיתוך
+          </label>
+          <div className="flex bg-white rounded-lg p-1 border border-gray-200 shadow-sm">
+            {[
+              { id: SegmentMode.CHARACTER, icon: Type, label: 'אותיות' },
+              { id: SegmentMode.WORD, icon: Scan, label: 'מילים' },
+              { id: SegmentMode.LINE, icon: AlignJustify, label: 'שורות' },
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setMode(item.id)}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-bold transition-all duration-200 ${
+                  mode === item.id
+                    ? 'bg-indigo-100 text-indigo-700 shadow-sm'
+                    : 'text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                <item.icon size={14} />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Action Buttons */}
-      <div className="flex flex-col sm:flex-row items-center gap-3 w-full">
+      <div className="flex flex-col sm:flex-row items-center gap-3 w-full pt-2">
         {!hasResults ? (
           <button
             onClick={onProcess}
             disabled={disabled || isProcessing}
-            className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-white font-medium transition-all ${
+            className={`w-full group relative flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-white font-bold text-sm tracking-wide transition-all duration-300 transform active:scale-95 ${
               disabled || isProcessing
                 ? 'bg-gray-300 cursor-not-allowed'
-                : 'bg-indigo-600 hover:bg-indigo-700 shadow-md hover:shadow-lg'
+                : 'bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 bg-[length:200%_auto] hover:bg-right shadow-lg shadow-indigo-200'
             }`}
           >
             {isProcessing ? (
               <>
-                <Loader2 size={18} className="animate-spin" />
+                <Loader2 size={20} className="animate-spin" />
                 מעבד תמונה...
               </>
             ) : (
               <>
-                <Scan size={18} />
-                בצע ניתוח וזיהוי
+                <Scan size={20} className="group-hover:rotate-12 transition-transform" />
+                התחל ניתוח וזיהוי
               </>
             )}
           </button>
@@ -112,17 +111,17 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           <>
             <button
               onClick={onDownloadText}
-              className="w-full sm:w-1/2 flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-all font-medium"
+              className="w-full sm:w-1/2 flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-indigo-700 bg-white border-2 border-indigo-100 hover:border-indigo-200 hover:bg-indigo-50 transition-all font-bold text-sm shadow-sm"
             >
               <FileText size={18} />
               הורד כטקסט (.txt)
             </button>
             <button
               onClick={onDownload}
-              className="w-full sm:w-1/2 flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-white font-medium bg-green-600 hover:bg-green-700 shadow-md hover:shadow-lg transition-all"
+              className="w-full sm:w-1/2 flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-white font-bold text-sm bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-lg shadow-emerald-100 transition-all active:scale-95"
             >
               <FolderTree size={18} />
-              הורד תמונות (ZIP)
+              הורד ZIP (תמונות + JSON)
             </button>
           </>
         )}
