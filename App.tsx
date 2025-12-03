@@ -105,6 +105,51 @@ const App: React.FC = () => {
     generateAndDownloadZip(segments, mode);
   };
 
+  const handleDownloadText = () => {
+    if (segments.length === 0) return;
+
+    // Reconstruct text based on segments
+    // Since segments are already sorted RTL (lines top-down, items right-left)
+    // We just need to insert newlines when y-coordinate jumps significantly
+    
+    let fullText = "";
+    let lastY = -1;
+    const lineThreshold = 30; // Same as sorting logic
+
+    segments.forEach((seg, index) => {
+      // Check for new line
+      if (lastY !== -1 && Math.abs(seg.box.ymin - lastY) > lineThreshold) {
+        fullText += "\n";
+      }
+      
+      // Add text. If it's not the start of a line, add a space (unless in Char mode)
+      const isNewLine = lastY !== -1 && Math.abs(seg.box.ymin - lastY) > lineThreshold;
+      const isFirst = index === 0;
+      
+      if (!isFirst && !isNewLine && mode !== SegmentMode.CHARACTER) {
+         fullText += " ";
+      }
+      
+      fullText += seg.text;
+      
+      // Update tracking Y (using average of line would be better, but simple prev Y works for sorted list)
+      if (isNewLine || lastY === -1) {
+          lastY = seg.box.ymin;
+      }
+    });
+
+    // Create download
+    const blob = new Blob([fullText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `extracted_text_${new Date().toISOString().slice(0,10)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const handleReset = () => {
     setSelectedImage(null);
     setSegments([]);
@@ -198,6 +243,7 @@ const App: React.FC = () => {
                     isProcessing={isProcessing}
                     hasResults={segments.length > 0}
                     onDownload={handleDownload}
+                    onDownloadText={handleDownloadText}
                     disabled={false}
                   />
                 </div>

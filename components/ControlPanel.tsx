@@ -1,6 +1,6 @@
 import React from 'react';
 import { SegmentMode } from '../types';
-import { Scan, Type, AlignJustify, Loader2, FolderTree, Cpu } from 'lucide-react';
+import { Scan, Type, AlignJustify, Loader2, FolderTree, Cpu, FileText } from 'lucide-react';
 
 interface ControlPanelProps {
   mode: SegmentMode;
@@ -11,6 +11,7 @@ interface ControlPanelProps {
   isProcessing: boolean;
   hasResults: boolean;
   onDownload: () => void;
+  onDownloadText: () => void;
   disabled: boolean;
 }
 
@@ -23,6 +24,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   isProcessing,
   hasResults,
   onDownload,
+  onDownloadText,
   disabled
 }) => {
   return (
@@ -83,7 +85,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
       </div>
 
       {/* Action Buttons */}
-      <div className="flex items-center gap-3 w-full">
+      <div className="flex flex-col sm:flex-row items-center gap-3 w-full">
         {!hasResults ? (
           <button
             onClick={onProcess}
@@ -107,13 +109,22 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             )}
           </button>
         ) : (
-          <button
-            onClick={onDownload}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-white font-medium bg-green-600 hover:bg-green-700 shadow-md hover:shadow-lg transition-all"
-          >
-            <FolderTree size={18} />
-            הורד תיקיות (מסודר לדרייב)
-          </button>
+          <>
+            <button
+              onClick={onDownloadText}
+              className="w-full sm:w-1/2 flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-all font-medium"
+            >
+              <FileText size={18} />
+              הורד כטקסט (.txt)
+            </button>
+            <button
+              onClick={onDownload}
+              className="w-full sm:w-1/2 flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-white font-medium bg-green-600 hover:bg-green-700 shadow-md hover:shadow-lg transition-all"
+            >
+              <FolderTree size={18} />
+              הורד תמונות (ZIP)
+            </button>
+          </>
         )}
       </div>
     </div>
